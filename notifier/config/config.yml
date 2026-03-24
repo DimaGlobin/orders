@@ -1,0 +1,10 @@
+# Notifier — example configuration
+
+kafka:
+  brokers: localhost:9092
+  topic: orders
+  group_id: notifier
+
+logger:
+  level: info
+  format: json

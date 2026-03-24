@@ -1,0 +1,21 @@
+# Orders API — example configuration
+
+http:
+  host: localhost
+  port: 8080
+
+db:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  name: orders
+  sslmode: disable
+
+kafka:
+  brokers: localhost:9092
+  topic: orders
+
+logger:
+  level: info
+  format: json
