@@ -141,5 +141,8 @@ func validateKafka(cfg KafkaConfig) error {
 	if cfg.Brokers == "" {
 		return apperrors.NewValidationError("KAFKA_BROKERS", "must not be empty")
 	}
+	if cfg.Topic == "" {
+		return apperrors.NewValidationError("KAFKA_TOPIC", "must not be empty")
+	}
 	return nil
 }

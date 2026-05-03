@@ -7,5 +7,5 @@ import (
 )
 
 type EventHandler interface {
-	HandleOrderCreated(ctx context.Context, evt model.OrderCreated) error
+	HandleOrderEvent(ctx context.Context, evt model.OrderEvent) error
 }

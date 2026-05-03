@@ -25,4 +25,5 @@ type OrderItem struct {
 	ProductID int64
 	Quantity  int
 	Price     int64 // cents
+	CreatedAt time.Time
 }

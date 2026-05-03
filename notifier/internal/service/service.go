@@ -16,10 +16,12 @@ func NewService(sender Sender, log *slog.Logger) *Service {
 	return &Service{sender: sender, log: log}
 }
 
-func (s *Service) HandleOrderCreated(ctx context.Context, evt model.OrderCreated) error {
-	s.log.Info("handling order created event",
+func (s *Service) HandleOrderEvent(ctx context.Context, evt model.OrderEvent) error {
+	s.log.Info("handling order event",
+		"type", evt.Type,
 		"order_id", evt.OrderID,
 		"user_id", evt.UserID,
+		"status", evt.Status,
 	)
 
 	notification := &model.Notification{
