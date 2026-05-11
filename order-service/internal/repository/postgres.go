@@ -8,10 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/dimaglobin/order-service/internal/apperrors"
+	"github.com/dimaglobin/order-service/internal/ctxkey"
 	"github.com/dimaglobin/order-service/internal/model"
 )
 
@@ -215,7 +217,12 @@ func writeOutbox(ctx context.Context, tx pgx.Tx, order *model.Order, eventType m
 			Price:     item.Price,
 		}
 	}
+	eventID, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("generate event id: %w", err)
+	}
 	evt := model.OrderEvent{
+		EventID:    eventID.String(),
 		Type:       eventType,
 		Version:    1,
 		OrderID:    order.ID,
@@ -228,11 +235,19 @@ func writeOutbox(ctx context.Context, tx pgx.Tx, order *model.Order, eventType m
 	if err != nil {
 		return fmt.Errorf("marshal event: %w", err)
 	}
-	_, err = tx.Exec(ctx,
-		`INSERT INTO outbox (topic, key, payload) VALUES ($1, $2, $3)`,
-		outboxTopic, strconv.FormatInt(order.ID, 10), payload,
-	)
-	if err != nil {
+
+	var metadata []byte
+	if rid := ctxkey.RequestIDFrom(ctx); rid != "" {
+		metadata, err = json.Marshal(map[string]string{"request_id": rid})
+		if err != nil {
+			return fmt.Errorf("marshal metadata: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO outbox (topic, key, payload, metadata) VALUES ($1, $2, $3, $4)`,
+		outboxTopic, strconv.FormatInt(order.ID, 10), payload, metadata,
+	); err != nil {
 		return fmt.Errorf("insert outbox: %w", err)
 	}
 	return nil
