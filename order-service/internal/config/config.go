@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dimaglobin/order-service/internal/apperrors"
 	"github.com/ilyakaznacheev/cleanenv"
@@ -15,7 +16,18 @@ type Config struct {
 	HTTP   HTTPConfig   `yaml:"http"`
 	DB     DBConfig     `yaml:"db"`
 	Kafka  KafkaConfig  `yaml:"kafka"`
+	Outbox OutboxConfig `yaml:"outbox"`
 	Logger LoggerConfig `yaml:"logger"`
+}
+
+type OutboxConfig struct {
+	PollInterval    time.Duration `yaml:"poll_interval"    env:"OUTBOX_POLL_INTERVAL"    env-default:"1s"`
+	BatchSize       int           `yaml:"batch_size"       env:"OUTBOX_BATCH_SIZE"       env-default:"100"`
+	BatchTimeout    time.Duration `yaml:"batch_timeout"    env:"OUTBOX_BATCH_TIMEOUT"    env-default:"10s"`
+	MaxAttempts     int           `yaml:"max_attempts"     env:"OUTBOX_MAX_ATTEMPTS"     env-default:"5"`
+	Retention       time.Duration `yaml:"retention"        env:"OUTBOX_RETENTION"        env-default:"168h"` // 7 days
+	CleanupInterval time.Duration `yaml:"cleanup_interval" env:"OUTBOX_CLEANUP_INTERVAL" env-default:"1h"`
+	MetricsInterval time.Duration `yaml:"metrics_interval" env:"OUTBOX_METRICS_INTERVAL" env-default:"15s"`
 }
 
 type HTTPConfig struct {
@@ -104,7 +116,33 @@ func validate(cfg Config) error {
 		validatePort("DB_PORT", cfg.DB.Port),
 		validateLogger(cfg.Logger),
 		validateKafka(cfg.Kafka),
+		validateOutbox(cfg.Outbox),
 	)
+}
+
+func validateOutbox(cfg OutboxConfig) error {
+	if cfg.PollInterval <= 0 {
+		return apperrors.NewValidationError("OUTBOX_POLL_INTERVAL", "must be positive")
+	}
+	if cfg.BatchSize <= 0 {
+		return apperrors.NewValidationError("OUTBOX_BATCH_SIZE", "must be positive")
+	}
+	if cfg.BatchTimeout <= 0 {
+		return apperrors.NewValidationError("OUTBOX_BATCH_TIMEOUT", "must be positive")
+	}
+	if cfg.MaxAttempts <= 0 {
+		return apperrors.NewValidationError("OUTBOX_MAX_ATTEMPTS", "must be positive")
+	}
+	if cfg.Retention <= 0 {
+		return apperrors.NewValidationError("OUTBOX_RETENTION", "must be positive")
+	}
+	if cfg.CleanupInterval <= 0 {
+		return apperrors.NewValidationError("OUTBOX_CLEANUP_INTERVAL", "must be positive")
+	}
+	if cfg.MetricsInterval <= 0 {
+		return apperrors.NewValidationError("OUTBOX_METRICS_INTERVAL", "must be positive")
+	}
+	return nil
 }
 
 func load(cfgPath string, cfg any) error {
