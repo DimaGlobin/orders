@@ -13,7 +13,20 @@ import (
 
 type Config struct {
 	Kafka  KafkaConfig  `yaml:"kafka"`
+	SMTP   SMTPConfig   `yaml:"smtp"`
 	Logger LoggerConfig `yaml:"logger"`
+}
+
+type SMTPConfig struct {
+	Host string `yaml:"host" env:"SMTP_HOST" env-default:"localhost"`
+	Port int    `yaml:"port" env:"SMTP_PORT" env-default:"1025"`
+	From string `yaml:"from" env:"SMTP_FROM" env-default:"noreply@orders.local"`
+	// Demo: hardcoded recipient. Real systems would look up the user by ID.
+	To string `yaml:"to" env:"NOTIFY_EMAIL" env-default:"customer@example.com"`
+}
+
+func (c SMTPConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
 type KafkaConfig struct {
@@ -82,7 +95,25 @@ func validate(cfg Config) error {
 	return errors.Join(
 		validateLogger(cfg.Logger),
 		validateKafka(cfg.Kafka),
+		validateSMTP(cfg.SMTP),
 	)
+}
+
+func validateSMTP(cfg SMTPConfig) error {
+	if cfg.Port <= 0 || cfg.Port > 65535 {
+		return apperrors.NewValidationError("SMTP_PORT",
+			fmt.Sprintf("must be between 1 and 65535, got %d", cfg.Port))
+	}
+	if cfg.Host == "" {
+		return apperrors.NewValidationError("SMTP_HOST", "must not be empty")
+	}
+	if cfg.From == "" {
+		return apperrors.NewValidationError("SMTP_FROM", "must not be empty")
+	}
+	if cfg.To == "" {
+		return apperrors.NewValidationError("NOTIFY_EMAIL", "must not be empty")
+	}
+	return nil
 }
 
 func load(cfgPath string, cfg any) error {

@@ -77,8 +77,14 @@ cd notifier && go run ./cmd/ -config config/config.yml
 | `KAFKA_BROKERS` | Адреса брокеров Kafka (через запятую) | `localhost:9092` |
 | `KAFKA_TOPIC` | Топик Kafka | `orders` |
 | `KAFKA_GROUP_ID` | Consumer group ID | `notifier` |
+| `SMTP_HOST` | Хост SMTP-сервера | `localhost` |
+| `SMTP_PORT` | Порт SMTP-сервера | `1025` |
+| `SMTP_FROM` | Адрес отправителя писем | `noreply@orders.local` |
+| `NOTIFY_EMAIL` | Email получателя (демо: захардкожен один на всех) | `customer@example.com` |
 | `LOG_LEVEL` | Уровень логирования: debug/info/warn/error | `info` |
 | `LOG_FORMAT` | Формат логов: json/text | `json` |
+
+Письма отправляются через MailHog (фейковый SMTP для разработки). После запуска `make up` открой http://localhost:8025 — это веб-интерфейс MailHog с входящими письмами.
 
 ## Структура проекта
 

@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/segmentio/kafka-go v0.4.50
+	golang.org/x/sync v0.20.0
 )
 
 require (
