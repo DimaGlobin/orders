@@ -51,6 +51,11 @@ func run() error {
 	defer pool.Close()
 	log.Info("connected to postgres", "host", cfg.DB.Host, "db", cfg.DB.Name)
 
+	if err := ensureTopic(rootCtx, cfg.Kafka); err != nil {
+		return fmt.Errorf("ensure kafka topic: %w", err)
+	}
+	log.Info("kafka topic ready", "topic", cfg.Kafka.Topic)
+
 	writer := newKafkaWriter(cfg.Kafka)
 	defer writer.Close()
 	log.Info("kafka writer ready", "brokers", cfg.Kafka.Brokers, "topic", cfg.Kafka.Topic)
@@ -135,4 +140,39 @@ func newKafkaWriter(cfg config.KafkaConfig) *kafka.Writer {
 		BatchTimeout:           50 * time.Millisecond,
 		RequiredAcks:           kafka.RequireAll,
 	}
+}
+
+// ensureTopic creates the Kafka topic if it doesn't exist yet.
+// Treating "already exists" as success makes the call idempotent — safe to run
+// on every startup. Creating the topic explicitly (rather than relying on
+// auto-creation by the writer) guarantees it exists *before* any consumer
+// connects, so consumer groups register at offset 0 instead of at the
+// then-current end of a non-existent topic.
+func ensureTopic(ctx context.Context, cfg config.KafkaConfig) error {
+	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	client := &kafka.Client{
+		Addr:    kafka.TCP(cfg.BrokerList()...),
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.CreateTopics(dialCtx, &kafka.CreateTopicsRequest{
+		Topics: []kafka.TopicConfig{{
+			Topic:             cfg.Topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("create topics request: %w", err)
+	}
+
+	if topicErr, ok := resp.Errors[cfg.Topic]; ok && topicErr != nil {
+		if errors.Is(topicErr, kafka.TopicAlreadyExists) {
+			return nil
+		}
+		return fmt.Errorf("create topic %q: %w", cfg.Topic, topicErr)
+	}
+	return nil
 }
