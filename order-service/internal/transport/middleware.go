@@ -7,18 +7,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/dimaglobin/order-service/internal/ctxkey"
 )
 
-type ctxKey string
-
-const requestIDKey ctxKey = "request_id"
-
 // RequestIDFrom extracts the request ID stored by the RequestID middleware.
+// Re-exported here so callers in the transport layer don't need to import ctxkey.
 func RequestIDFrom(ctx context.Context) string {
-	if v, ok := ctx.Value(requestIDKey).(string); ok {
-		return v
-	}
-	return ""
+	return ctxkey.RequestIDFrom(ctx)
 }
 
 // Chain composes middleware so the first one runs outermost.
@@ -37,7 +33,7 @@ func RequestID(next http.Handler) http.Handler {
 			id = uuid.NewString()
 		}
 		w.Header().Set("X-Request-ID", id)
-		ctx := context.WithValue(r.Context(), requestIDKey, id)
+		ctx := ctxkey.WithRequestID(r.Context(), id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

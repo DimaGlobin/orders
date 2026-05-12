@@ -17,6 +17,7 @@ const (
 // Topic:          orders
 // Key:            strconv.FormatInt(OrderID, 10)  — guarantees per-order ordering
 type OrderEvent struct {
+	EventID    string           `json:"event_id"` // UUID v7 — consumer deduplication key
 	Type       EventType        `json:"type"`
 	Version    int              `json:"version"` // bump on breaking schema changes
 	OrderID    int64            `json:"order_id"`

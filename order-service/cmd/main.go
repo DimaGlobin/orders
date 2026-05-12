@@ -64,10 +64,12 @@ func run() error {
 	svc := service.NewService(repo, log)
 	orderHandler := transport.NewHandler(svc, log)
 	healthHandler := transport.NewHealthHandler(pool)
+	metricsHandler := transport.NewMetricsHandler()
 
 	mux := http.NewServeMux()
 	orderHandler.RegisterRoutes(mux)
 	healthHandler.RegisterRoutes(mux)
+	metricsHandler.RegisterRoutes(mux)
 
 	httpHandler := transport.Chain(mux,
 		transport.RequestID,
@@ -83,7 +85,9 @@ func run() error {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	relay := outbox.NewRelay(pool, writer, log)
+	relay := outbox.NewRelay(pool, writer, cfg.Outbox, log)
+	cleaner := outbox.NewCleaner(pool, cfg.Outbox, log)
+	gauges := outbox.NewGaugeUpdater(pool, cfg.Outbox, log)
 
 	g, gCtx := errgroup.WithContext(rootCtx)
 
@@ -95,9 +99,9 @@ func run() error {
 		return nil
 	})
 
-	g.Go(func() error {
-		return relay.Run(gCtx)
-	})
+	g.Go(func() error { return relay.Run(gCtx) })
+	g.Go(func() error { return cleaner.Run(gCtx) })
+	g.Go(func() error { return gauges.Run(gCtx) })
 
 	g.Go(func() error {
 		<-gCtx.Done()
