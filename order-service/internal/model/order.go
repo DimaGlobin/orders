@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type OrderStatus string
 
@@ -11,8 +15,8 @@ const (
 )
 
 type Order struct {
-	ID        int64
-	UserID    int64
+	ID        uuid.UUID
+	UserID    uuid.UUID
 	Status    OrderStatus
 	Items     []OrderItem
 	CreatedAt time.Time
@@ -20,9 +24,9 @@ type Order struct {
 }
 
 type OrderItem struct {
-	ID        int64
-	OrderID   int64
-	ProductID int64
+	ID        uuid.UUID
+	OrderID   uuid.UUID
+	ProductID uuid.UUID
 	Quantity  int
 	Price     int64 // cents
 	CreatedAt time.Time

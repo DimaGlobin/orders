@@ -80,8 +80,8 @@ func TestSMTPSender_Send_PassesCorrectArgsToDialer(t *testing.T) {
 	}
 
 	notif := &model.Notification{
-		OrderID: 42,
-		UserID:  7,
+		OrderID: "44444444-4444-4444-4444-444444444042",
+		UserID:  "77777777-7777-7777-7777-777777777777",
 		Subject: "Your order #42",
 		Body:    "Thanks!",
 	}

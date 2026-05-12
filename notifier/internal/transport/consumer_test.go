@@ -71,9 +71,9 @@ func (f *fakeReader) committedOffsets() []int64 {
 // fakeHandler records every event passed to it, can be configured to fail
 // on specific OrderIDs.
 type fakeHandler struct {
-	mu         sync.Mutex
-	handled    []model.OrderEvent
-	failOnIDs  map[int64]error // OrderID → error to return
+	mu        sync.Mutex
+	handled   []model.OrderEvent
+	failOnIDs map[string]error // OrderID → error to return
 }
 
 func (h *fakeHandler) HandleOrderEvent(_ context.Context, evt model.OrderEvent) error {
@@ -86,10 +86,10 @@ func (h *fakeHandler) HandleOrderEvent(_ context.Context, evt model.OrderEvent) 
 	return nil
 }
 
-func (h *fakeHandler) handledIDs() []int64 {
+func (h *fakeHandler) handledIDs() []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := make([]int64, len(h.handled))
+	out := make([]string, len(h.handled))
 	for i, e := range h.handled {
 		out[i] = e.OrderID
 	}
@@ -124,8 +124,8 @@ func runConsumerWithTimeout(t *testing.T, c *Consumer) error {
 func TestConsumer_HappyPath_CommitsAfterEachHandle(t *testing.T) {
 	reader := &fakeReader{
 		queue: []fetchResult{
-			{msg: kafka.Message{Offset: 1, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: 1})}},
-			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: 2})}},
+			{msg: kafka.Message{Offset: 1, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: "11111111-1111-1111-1111-111111111111"})}},
+			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: "22222222-2222-2222-2222-222222222222"})}},
 		},
 	}
 	handler := &fakeHandler{}
@@ -150,12 +150,12 @@ func TestConsumer_HandlerError_DoesNotCommit(t *testing.T) {
 	// at-least-once guarantee: failed messages are re-delivered on next run.
 	reader := &fakeReader{
 		queue: []fetchResult{
-			{msg: kafka.Message{Offset: 1, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: 1})}},
-			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: 2})}},
+			{msg: kafka.Message{Offset: 1, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: "11111111-1111-1111-1111-111111111111"})}},
+			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: "22222222-2222-2222-2222-222222222222"})}},
 		},
 	}
 	handler := &fakeHandler{
-		failOnIDs: map[int64]error{1: errors.New("downstream dead")},
+		failOnIDs: map[string]error{"11111111-1111-1111-1111-111111111111": errors.New("downstream dead")},
 	}
 
 	c := NewConsumer(reader, handler, discardLogger())
@@ -179,7 +179,7 @@ func TestConsumer_PoisonMessage_IsSkippedAndCommitted(t *testing.T) {
 	reader := &fakeReader{
 		queue: []fetchResult{
 			{msg: kafka.Message{Offset: 1, Value: []byte("{not valid json")}},
-			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: 99})}},
+			{msg: kafka.Message{Offset: 2, Value: mustEvent(t, model.OrderEvent{Type: "order.created", OrderID: "99999999-9999-9999-9999-999999999999"})}},
 		},
 	}
 	handler := &fakeHandler{}
@@ -188,7 +188,7 @@ func TestConsumer_PoisonMessage_IsSkippedAndCommitted(t *testing.T) {
 	_ = runConsumerWithTimeout(t, c)
 
 	// Handler invoked ONLY for the valid message.
-	if got := handler.handledIDs(); len(got) != 1 || got[0] != 99 {
+	if got := handler.handledIDs(); len(got) != 1 || got[0] != "99999999-9999-9999-9999-999999999999" {
 		t.Errorf("handler should see only the valid message, got %v", got)
 	}
 	// BOTH offsets committed — poison is "successfully skipped".

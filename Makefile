@@ -46,11 +46,14 @@ migrate-down: ## Rollback all migrations (requires running postgres)
 
 # ── Docker ───────────────────────────────────────────────────────────────────
 
-up: ## Start all services via docker-compose (build if needed)
+up: ## Start all services via docker-compose (uses existing images; run `make up-build` after code changes)
+	docker compose up -d
+
+up-build: ## Rebuild images and start all services
 	docker compose up --build -d
 
-up-infra: ## Start only infrastructure (postgres + kafka)
-	docker compose up postgres kafka -d
+up-infra: ## Start only infrastructure (postgres + kafka + mailhog)
+	docker compose up postgres kafka mailhog -d
 
 down: ## Stop and remove containers
 	docker compose down

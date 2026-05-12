@@ -5,7 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
+
+	"github.com/google/uuid"
 
 	"github.com/dimaglobin/order-service/internal/apperrors"
 	"github.com/dimaglobin/order-service/internal/model"
@@ -23,8 +24,8 @@ func NewHandler(orders OrderService, log *slog.Logger) *Handler {
 // RegisterRoutes wires all order endpoints into mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /orders", h.Create)
+	mux.HandleFunc("GET /orders", h.ListOrders)
 	mux.HandleFunc("GET /orders/{id}", h.GetByID)
-	mux.HandleFunc("GET /orders", h.ListByUser)
 	mux.HandleFunc("POST /orders/{id}/cancel", h.CancelOrder)
 }
 
@@ -77,13 +78,15 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /orders?user_id={id}
-func (h *Handler) ListByUser(w http.ResponseWriter, r *http.Request) {
+//
+// user_id is required
+func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	userID, ok := parseID(w, r.URL.Query().Get("user_id"))
 	if !ok {
 		return
 	}
 
-	orders, err := h.orders.ListByUser(r.Context(), userID)
+	orders, err := h.orders.ListOrders(r.Context(), userID)
 	if err != nil {
 		h.log.Error("list orders", "error", err, "user_id", userID)
 		writeErrorFrom(w, err)
@@ -112,11 +115,11 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func parseID(w http.ResponseWriter, raw string) (int64, bool) {
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || id <= 0 {
+func parseID(w http.ResponseWriter, raw string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(raw)
+	if err != nil || id == uuid.Nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
-		return 0, false
+		return uuid.Nil, false
 	}
 	return id, true
 }

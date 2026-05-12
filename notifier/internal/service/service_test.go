@@ -45,8 +45,8 @@ func TestService_HandleOrderEvent_KnownTypes_SendNotification(t *testing.T) {
 			name: "order.created → confirmation email",
 			evt: model.OrderEvent{
 				Type:    model.EventOrderCreated,
-				OrderID: 42,
-				UserID:  7,
+				OrderID: "44444444-4444-4444-4444-444444444042",
+				UserID:  "77777777-7777-7777-7777-777777777777",
 				Status:  "new",
 			},
 			wantSubjectPart: "confirmed",
@@ -56,8 +56,8 @@ func TestService_HandleOrderEvent_KnownTypes_SendNotification(t *testing.T) {
 			name: "order.cancelled → cancellation email",
 			evt: model.OrderEvent{
 				Type:    model.EventOrderCancelled,
-				OrderID: 42,
-				UserID:  7,
+				OrderID: "44444444-4444-4444-4444-444444444042",
+				UserID:  "77777777-7777-7777-7777-777777777777",
 				Status:  "cancelled",
 			},
 			wantSubjectPart: "cancelled",
@@ -80,10 +80,10 @@ func TestService_HandleOrderEvent_KnownTypes_SendNotification(t *testing.T) {
 			got := sender.sent[0]
 
 			if got.OrderID != tt.evt.OrderID {
-				t.Errorf("OrderID = %d, want %d", got.OrderID, tt.evt.OrderID)
+				t.Errorf("OrderID = %q, want %q", got.OrderID, tt.evt.OrderID)
 			}
 			if got.UserID != tt.evt.UserID {
-				t.Errorf("UserID = %d, want %d", got.UserID, tt.evt.UserID)
+				t.Errorf("UserID = %q, want %q", got.UserID, tt.evt.UserID)
 			}
 			if got.Type != model.TypeEmail {
 				t.Errorf("Type = %q, want %q", got.Type, model.TypeEmail)
@@ -107,7 +107,7 @@ func TestService_HandleOrderEvent_UnknownType_NothingSent(t *testing.T) {
 
 	evt := model.OrderEvent{
 		Type:    "order.weird", // not a known type
-		OrderID: 42,
+		OrderID: "44444444-4444-4444-4444-444444444042",
 	}
 
 	if err := svc.HandleOrderEvent(context.Background(), evt); err != nil {
@@ -125,7 +125,7 @@ func TestService_HandleOrderEvent_SenderError_Propagates(t *testing.T) {
 
 	evt := model.OrderEvent{
 		Type:    model.EventOrderCreated,
-		OrderID: 42,
+		OrderID: "44444444-4444-4444-4444-444444444042",
 	}
 
 	err := svc.HandleOrderEvent(context.Background(), evt)
@@ -149,15 +149,15 @@ func TestRenderForEvent_OrderIDInSubjectAndBody(t *testing.T) {
 		t.Run(et, func(t *testing.T) {
 			subject, body, ok := renderForEvent(model.OrderEvent{
 				Type:    et,
-				OrderID: 12345,
+				OrderID: "abcdabcd-abcd-abcd-abcd-abcdabcd1234",
 			})
 			if !ok {
 				t.Fatal("renderForEvent returned ok=false for known type")
 			}
-			if !strings.Contains(subject, "12345") {
+			if !strings.Contains(subject, "abcdabcd-abcd-abcd-abcd-abcdabcd1234") {
 				t.Errorf("subject must contain order ID: %q", subject)
 			}
-			if !strings.Contains(body, "12345") {
+			if !strings.Contains(body, "abcdabcd-abcd-abcd-abcd-abcdabcd1234") {
 				t.Errorf("body must contain order ID: %q", body)
 			}
 		})

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	kafka "github.com/segmentio/kafka-go"
@@ -56,7 +57,7 @@ func (r *Relay) Run(ctx context.Context) error {
 }
 
 type outboxRecord struct {
-	id      int64
+	id      uuid.UUID
 	topic   string
 	key     string
 	payload []byte
@@ -88,7 +89,7 @@ func (r *Relay) processBatch(parent context.Context) error {
 		msgs[i] = kafka.Message{Topic: rec.topic, Key: []byte(rec.key), Value: rec.payload}
 	}
 
-	ids := make([]int64, len(records))
+	ids := make([]uuid.UUID, len(records))
 	for i, rec := range records {
 		ids[i] = rec.id
 	}
@@ -148,7 +149,7 @@ func (r *Relay) lockBatch(ctx context.Context, tx pgx.Tx) ([]outboxRecord, error
 	return records, rows.Err()
 }
 
-func (r *Relay) markFailed(ctx context.Context, tx pgx.Tx, ids []int64, cause error) error {
+func (r *Relay) markFailed(ctx context.Context, tx pgx.Tx, ids []uuid.UUID, cause error) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE outbox
 		 SET attempts   = attempts + 1,

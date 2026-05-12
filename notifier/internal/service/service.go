@@ -48,10 +48,10 @@ func (s *Service) HandleOrderEvent(ctx context.Context, evt model.OrderEvent) er
 func renderForEvent(evt model.OrderEvent) (subject, body string, ok bool) {
 	switch evt.Type {
 	case model.EventOrderCreated:
-		subject = fmt.Sprintf("Order #%d confirmed", evt.OrderID)
+		subject = fmt.Sprintf("Order %s confirmed", evt.OrderID)
 		body = fmt.Sprintf(
 			"Hello!\n\n"+
-				"Your order #%d has been received and is being processed.\n"+
+				"Your order %s has been received and is being processed.\n"+
 				"We'll let you know as soon as it ships.\n\n"+
 				"Best,\nOrders Team",
 			evt.OrderID,
@@ -59,10 +59,10 @@ func renderForEvent(evt model.OrderEvent) (subject, body string, ok bool) {
 		return subject, body, true
 
 	case model.EventOrderCancelled:
-		subject = fmt.Sprintf("Order #%d cancelled", evt.OrderID)
+		subject = fmt.Sprintf("Order %s cancelled", evt.OrderID)
 		body = fmt.Sprintf(
 			"Hello,\n\n"+
-				"Your order #%d has been cancelled.\n"+
+				"Your order %s has been cancelled.\n"+
 				"If this was unexpected, please contact support.\n\n"+
 				"Best,\nOrders Team",
 			evt.OrderID,

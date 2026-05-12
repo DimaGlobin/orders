@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,28 +28,38 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres {
 
 func (r *Postgres) Create(ctx context.Context, order *model.Order) error {
 	return r.withTx(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx,
-			`INSERT INTO orders (user_id, status, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4)
-			 RETURNING id`,
-			order.UserID, order.Status, order.CreatedAt, order.UpdatedAt,
-		).Scan(&order.ID)
+		orderID, err := uuid.NewV7()
 		if err != nil {
+			return fmt.Errorf("generate order id: %w", err)
+		}
+		order.ID = orderID
+
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO orders (id, user_id, status, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			order.ID, order.UserID, order.Status, order.CreatedAt, order.UpdatedAt,
+		); err != nil {
 			return fmt.Errorf("insert order: %w", err)
 		}
 
 		for i := range order.Items {
+			itemID, err := uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("generate item id: %w", err)
+			}
+			order.Items[i].ID = itemID
 			order.Items[i].OrderID = order.ID
-			err := tx.QueryRow(ctx,
-				`INSERT INTO order_items (order_id, product_id, quantity, price)
-				 VALUES ($1, $2, $3, $4)
-				 RETURNING id, created_at`,
+
+			if err := tx.QueryRow(ctx,
+				`INSERT INTO order_items (id, order_id, product_id, quantity, price)
+				 VALUES ($1, $2, $3, $4, $5)
+				 RETURNING created_at`,
+				order.Items[i].ID,
 				order.Items[i].OrderID,
 				order.Items[i].ProductID,
 				order.Items[i].Quantity,
 				order.Items[i].Price,
-			).Scan(&order.Items[i].ID, &order.Items[i].CreatedAt)
-			if err != nil {
+			).Scan(&order.Items[i].CreatedAt); err != nil {
 				return fmt.Errorf("insert item: %w", err)
 			}
 		}
@@ -59,7 +68,7 @@ func (r *Postgres) Create(ctx context.Context, order *model.Order) error {
 	})
 }
 
-func (r *Postgres) GetByID(ctx context.Context, id int64) (*model.Order, error) {
+func (r *Postgres) GetByID(ctx context.Context, id uuid.UUID) (*model.Order, error) {
 	order, err := selectOrder(ctx, r.pool, id)
 	if err != nil {
 		return nil, err
@@ -72,7 +81,7 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*model.Order, error) 
 	return order, nil
 }
 
-func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status model.OrderStatus) (*model.Order, error) {
+func (r *Postgres) UpdateStatus(ctx context.Context, id uuid.UUID, status model.OrderStatus) (*model.Order, error) {
 	var result *model.Order
 	err := r.withTx(ctx, func(tx pgx.Tx) error {
 		var o model.Order
@@ -107,7 +116,7 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status model.Orde
 	return result, err
 }
 
-func (r *Postgres) ListByUserID(ctx context.Context, userID int64) ([]*model.Order, error) {
+func (r *Postgres) ListOrders(ctx context.Context, userID uuid.UUID) ([]*model.Order, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, user_id, status, created_at, updated_at
 		 FROM orders WHERE user_id = $1 ORDER BY id`,
@@ -155,7 +164,7 @@ func (r *Postgres) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func selectOrder(ctx context.Context, pool *pgxpool.Pool, id int64) (*model.Order, error) {
+func selectOrder(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*model.Order, error) {
 	var o model.Order
 	err := pool.QueryRow(ctx,
 		`SELECT id, user_id, status, created_at, updated_at FROM orders WHERE id = $1`,
@@ -170,7 +179,7 @@ func selectOrder(ctx context.Context, pool *pgxpool.Pool, id int64) (*model.Orde
 	return &o, nil
 }
 
-func selectItems(ctx context.Context, pool *pgxpool.Pool, orderID int64) ([]model.OrderItem, error) {
+func selectItems(ctx context.Context, pool *pgxpool.Pool, orderID uuid.UUID) ([]model.OrderItem, error) {
 	rows, err := pool.Query(ctx,
 		`SELECT id, order_id, product_id, quantity, price, created_at
 		 FROM order_items WHERE order_id = $1 ORDER BY id`,
@@ -183,7 +192,7 @@ func selectItems(ctx context.Context, pool *pgxpool.Pool, orderID int64) ([]mode
 	return scanItems(rows)
 }
 
-func selectItemsTx(ctx context.Context, tx pgx.Tx, orderID int64) ([]model.OrderItem, error) {
+func selectItemsTx(ctx context.Context, tx pgx.Tx, orderID uuid.UUID) ([]model.OrderItem, error) {
 	rows, err := tx.Query(ctx,
 		`SELECT id, order_id, product_id, quantity, price, created_at
 		 FROM order_items WHERE order_id = $1 ORDER BY id`,
@@ -222,7 +231,7 @@ func writeOutbox(ctx context.Context, tx pgx.Tx, order *model.Order, eventType m
 		return fmt.Errorf("generate event id: %w", err)
 	}
 	evt := model.OrderEvent{
-		EventID:    eventID.String(),
+		EventID:    eventID,
 		Type:       eventType,
 		Version:    1,
 		OrderID:    order.ID,
@@ -244,9 +253,14 @@ func writeOutbox(ctx context.Context, tx pgx.Tx, order *model.Order, eventType m
 		}
 	}
 
+	outboxID, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("generate outbox id: %w", err)
+	}
+
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO outbox (topic, key, payload, metadata) VALUES ($1, $2, $3, $4)`,
-		outboxTopic, strconv.FormatInt(order.ID, 10), payload, metadata,
+		`INSERT INTO outbox (id, topic, key, payload, metadata) VALUES ($1, $2, $3, $4, $5)`,
+		outboxID, outboxTopic, order.ID.String(), payload, metadata,
 	); err != nil {
 		return fmt.Errorf("insert outbox: %w", err)
 	}

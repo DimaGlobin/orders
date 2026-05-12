@@ -5,12 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/dimaglobin/order-service/internal/apperrors"
 	"github.com/dimaglobin/order-service/internal/transport"
 )
 
 func TestCreateOrderRequest_Validate(t *testing.T) {
-	validItem := transport.CreateItemRequest{ProductID: 10, Quantity: 1, Price: 100}
+	userID := uuid.New()
+	productID := uuid.New()
+	validItem := transport.CreateItemRequest{ProductID: productID, Quantity: 1, Price: 100}
 
 	tests := []struct {
 		name      string
@@ -20,50 +24,45 @@ func TestCreateOrderRequest_Validate(t *testing.T) {
 	}{
 		{
 			name:   "valid",
-			req:    transport.CreateOrderRequest{UserID: 1, Items: []transport.CreateItemRequest{validItem}},
+			req:    transport.CreateOrderRequest{UserID: userID, Items: []transport.CreateItemRequest{validItem}},
 			wantOK: true,
 		},
 		{
-			name:      "user_id zero",
-			req:       transport.CreateOrderRequest{UserID: 0, Items: []transport.CreateItemRequest{validItem}},
-			wantField: "user_id",
-		},
-		{
-			name:      "user_id negative",
-			req:       transport.CreateOrderRequest{UserID: -1, Items: []transport.CreateItemRequest{validItem}},
+			name:      "user_id nil",
+			req:       transport.CreateOrderRequest{UserID: uuid.Nil, Items: []transport.CreateItemRequest{validItem}},
 			wantField: "user_id",
 		},
 		{
 			name:      "items empty",
-			req:       transport.CreateOrderRequest{UserID: 1, Items: nil},
+			req:       transport.CreateOrderRequest{UserID: userID, Items: nil},
 			wantField: "items",
 		},
 		{
-			name: "product_id zero",
-			req: transport.CreateOrderRequest{UserID: 1, Items: []transport.CreateItemRequest{
-				{ProductID: 0, Quantity: 1, Price: 1},
+			name: "product_id nil",
+			req: transport.CreateOrderRequest{UserID: userID, Items: []transport.CreateItemRequest{
+				{ProductID: uuid.Nil, Quantity: 1, Price: 1},
 			}},
 			wantField: "items[0].product_id",
 		},
 		{
 			name: "quantity zero",
-			req: transport.CreateOrderRequest{UserID: 1, Items: []transport.CreateItemRequest{
-				{ProductID: 1, Quantity: 0, Price: 1},
+			req: transport.CreateOrderRequest{UserID: userID, Items: []transport.CreateItemRequest{
+				{ProductID: productID, Quantity: 0, Price: 1},
 			}},
 			wantField: "items[0].quantity",
 		},
 		{
 			name: "price zero",
-			req: transport.CreateOrderRequest{UserID: 1, Items: []transport.CreateItemRequest{
-				{ProductID: 1, Quantity: 1, Price: 0},
+			req: transport.CreateOrderRequest{UserID: userID, Items: []transport.CreateItemRequest{
+				{ProductID: productID, Quantity: 1, Price: 0},
 			}},
 			wantField: "items[0].price",
 		},
 		{
 			name: "second item invalid",
-			req: transport.CreateOrderRequest{UserID: 1, Items: []transport.CreateItemRequest{
+			req: transport.CreateOrderRequest{UserID: userID, Items: []transport.CreateItemRequest{
 				validItem,
-				{ProductID: 1, Quantity: 1, Price: -5},
+				{ProductID: productID, Quantity: 1, Price: -5},
 			}},
 			wantField: "items[1].price",
 		},

@@ -17,10 +17,12 @@ const (
 	StatusFailed  NotificationStatus = "failed"
 )
 
+// IDs are UUID strings (matching order-service). Kept as plain strings here
+// because the notifier only logs/renders them — no need to pull in a UUID lib.
 type Notification struct {
-	ID      int64
-	OrderID int64
-	UserID  int64
+	ID      string
+	OrderID string
+	UserID  string
 	Type    NotificationType
 	Status  NotificationStatus
 	SentAt  time.Time

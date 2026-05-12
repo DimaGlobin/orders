@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type EventType string
 
@@ -15,20 +19,20 @@ const (
 //
 // Schema version: 1
 // Topic:          orders
-// Key:            strconv.FormatInt(OrderID, 10)  — guarantees per-order ordering
+// Key:            OrderID.String() — guarantees per-order ordering
 type OrderEvent struct {
-	EventID    string           `json:"event_id"` // UUID v7 — consumer deduplication key
+	EventID    uuid.UUID        `json:"event_id"` // UUID v7 — consumer deduplication key
 	Type       EventType        `json:"type"`
 	Version    int              `json:"version"` // bump on breaking schema changes
-	OrderID    int64            `json:"order_id"`
-	UserID     int64            `json:"user_id"`
+	OrderID    uuid.UUID        `json:"order_id"`
+	UserID     uuid.UUID        `json:"user_id"`
 	Status     string           `json:"status"`
 	Items      []OrderEventItem `json:"items"`
 	OccurredAt time.Time        `json:"occurred_at"`
 }
 
 type OrderEventItem struct {
-	ProductID int64 `json:"product_id"`
-	Quantity  int   `json:"quantity"`
-	Price     int64 `json:"price"` // cents
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  int       `json:"quantity"`
+	Price     int64     `json:"price"` // cents
 }

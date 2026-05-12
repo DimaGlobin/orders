@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/dimaglobin/order-service/internal/apperrors"
 	"github.com/dimaglobin/order-service/internal/model"
 	"github.com/dimaglobin/order-service/internal/transport"
@@ -22,23 +24,23 @@ func discardLogger() *slog.Logger {
 }
 
 type fakeService struct {
-	createFn     func(ctx context.Context, order *model.Order) error
-	getFn        func(ctx context.Context, id int64) (*model.Order, error)
-	cancelFn     func(ctx context.Context, id int64) (*model.Order, error)
-	listByUserFn func(ctx context.Context, userID int64) ([]*model.Order, error)
+	createFn func(ctx context.Context, order *model.Order) error
+	getFn    func(ctx context.Context, id uuid.UUID) (*model.Order, error)
+	cancelFn func(ctx context.Context, id uuid.UUID) (*model.Order, error)
+	listFn   func(ctx context.Context, userID uuid.UUID) ([]*model.Order, error)
 }
 
 func (f *fakeService) CreateOrder(ctx context.Context, o *model.Order) error {
 	return f.createFn(ctx, o)
 }
-func (f *fakeService) GetOrder(ctx context.Context, id int64) (*model.Order, error) {
+func (f *fakeService) GetOrder(ctx context.Context, id uuid.UUID) (*model.Order, error) {
 	return f.getFn(ctx, id)
 }
-func (f *fakeService) CancelOrder(ctx context.Context, id int64) (*model.Order, error) {
+func (f *fakeService) CancelOrder(ctx context.Context, id uuid.UUID) (*model.Order, error) {
 	return f.cancelFn(ctx, id)
 }
-func (f *fakeService) ListByUser(ctx context.Context, userID int64) ([]*model.Order, error) {
-	return f.listByUserFn(ctx, userID)
+func (f *fakeService) ListOrders(ctx context.Context, userID uuid.UUID) ([]*model.Order, error) {
+	return f.listFn(ctx, userID)
 }
 
 func newRequest(method, target, body string) *http.Request {
@@ -50,6 +52,10 @@ func newRequest(method, target, body string) *http.Request {
 }
 
 func TestHandler_Create(t *testing.T) {
+	uid := uuid.New().String()
+	pid := uuid.New().String()
+	validBody := fmt.Sprintf(`{"user_id":%q,"items":[{"product_id":%q,"quantity":2,"price":500}]}`, uid, pid)
+
 	tests := []struct {
 		name       string
 		body       string
@@ -58,7 +64,7 @@ func TestHandler_Create(t *testing.T) {
 	}{
 		{
 			name:       "201 happy path",
-			body:       `{"user_id":1,"items":[{"product_id":10,"quantity":2,"price":500}]}`,
+			body:       validBody,
 			wantStatus: http.StatusCreated,
 		},
 		{
@@ -68,22 +74,22 @@ func TestHandler_Create(t *testing.T) {
 		},
 		{
 			name:       "400 validation: empty items",
-			body:       `{"user_id":1,"items":[]}`,
+			body:       fmt.Sprintf(`{"user_id":%q,"items":[]}`, uid),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "400 validation: zero user_id",
-			body:       `{"user_id":0,"items":[{"product_id":1,"quantity":1,"price":1}]}`,
+			name:       "400 validation: nil user_id",
+			body:       fmt.Sprintf(`{"user_id":%q,"items":[{"product_id":%q,"quantity":1,"price":1}]}`, uuid.Nil, pid),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "400 validation: zero price",
-			body:       `{"user_id":1,"items":[{"product_id":1,"quantity":1,"price":0}]}`,
+			body:       fmt.Sprintf(`{"user_id":%q,"items":[{"product_id":%q,"quantity":1,"price":0}]}`, uid, pid),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "500 service error",
-			body:       `{"user_id":1,"items":[{"product_id":10,"quantity":2,"price":500}]}`,
+			body:       validBody,
 			svcErr:     errors.New("boom"),
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -107,27 +113,29 @@ func TestHandler_Create(t *testing.T) {
 }
 
 func TestHandler_GetByID(t *testing.T) {
+	validID := uuid.New().String()
+
 	tests := []struct {
 		name       string
 		id         string
 		svcErr     error
 		wantStatus int
 	}{
-		{"200 happy", "42", nil, http.StatusOK},
+		{"200 happy", validID, nil, http.StatusOK},
 		{"400 invalid id", "abc", nil, http.StatusBadRequest},
-		{"400 zero id", "0", nil, http.StatusBadRequest},
-		{"404 not found", "42", apperrors.ErrNotFound, http.StatusNotFound},
-		{"500 internal", "42", errors.New("boom"), http.StatusInternalServerError},
+		{"400 nil id", uuid.Nil.String(), nil, http.StatusBadRequest},
+		{"404 not found", validID, apperrors.ErrNotFound, http.StatusNotFound},
+		{"500 internal", validID, errors.New("boom"), http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &fakeService{
-				getFn: func(_ context.Context, id int64) (*model.Order, error) {
+				getFn: func(_ context.Context, id uuid.UUID) (*model.Order, error) {
 					if tt.svcErr != nil {
 						return nil, tt.svcErr
 					}
-					return &model.Order{ID: id, UserID: 1, Status: model.StatusNew}, nil
+					return &model.Order{ID: id, UserID: uuid.New(), Status: model.StatusNew}, nil
 				},
 			}
 			h := transport.NewHandler(svc, discardLogger())
@@ -145,15 +153,17 @@ func TestHandler_GetByID(t *testing.T) {
 }
 
 func TestHandler_GetByID_DecodesResponseBody(t *testing.T) {
+	orderID := uuid.New()
+	userID := uuid.New()
 	svc := &fakeService{
-		getFn: func(_ context.Context, id int64) (*model.Order, error) {
-			return &model.Order{ID: id, UserID: 7, Status: model.StatusNew}, nil
+		getFn: func(_ context.Context, id uuid.UUID) (*model.Order, error) {
+			return &model.Order{ID: id, UserID: userID, Status: model.StatusNew}, nil
 		},
 	}
 	h := transport.NewHandler(svc, discardLogger())
 
-	req := newRequest(http.MethodGet, "/orders/42", "")
-	req.SetPathValue("id", "42")
+	req := newRequest(http.MethodGet, "/orders/"+orderID.String(), "")
+	req.SetPathValue("id", orderID.String())
 	w := httptest.NewRecorder()
 	h.GetByID(w, req)
 
@@ -161,12 +171,14 @@ func TestHandler_GetByID_DecodesResponseBody(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.ID != 42 || resp.UserID != 7 || resp.Status != "new" {
+	if resp.ID != orderID || resp.UserID != userID || resp.Status != "new" {
 		t.Errorf("response: %+v", resp)
 	}
 }
 
 func TestHandler_CancelOrder(t *testing.T) {
+	orderID := uuid.New().String()
+
 	tests := []struct {
 		name       string
 		svcErr     error
@@ -181,7 +193,7 @@ func TestHandler_CancelOrder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &fakeService{
-				cancelFn: func(_ context.Context, id int64) (*model.Order, error) {
+				cancelFn: func(_ context.Context, id uuid.UUID) (*model.Order, error) {
 					if tt.svcErr != nil {
 						return nil, tt.svcErr
 					}
@@ -190,8 +202,8 @@ func TestHandler_CancelOrder(t *testing.T) {
 			}
 			h := transport.NewHandler(svc, discardLogger())
 
-			req := newRequest(http.MethodPost, "/orders/1/cancel", "")
-			req.SetPathValue("id", "1")
+			req := newRequest(http.MethodPost, "/orders/"+orderID+"/cancel", "")
+			req.SetPathValue("id", orderID)
 			w := httptest.NewRecorder()
 			h.CancelOrder(w, req)
 
@@ -202,15 +214,17 @@ func TestHandler_CancelOrder(t *testing.T) {
 	}
 }
 
-func TestHandler_ListByUser(t *testing.T) {
+func TestHandler_ListOrders(t *testing.T) {
+	withResults := uuid.New()
+
 	tests := []struct {
 		name       string
 		query      string
 		wantStatus int
 		wantLen    int
 	}{
-		{"200 with results", "user_id=5", http.StatusOK, 2},
-		{"200 empty list", "user_id=99", http.StatusOK, 0},
+		{"200 with results", "user_id=" + withResults.String(), http.StatusOK, 2},
+		{"200 empty list", "user_id=" + uuid.New().String(), http.StatusOK, 0},
 		{"400 missing user_id", "", http.StatusBadRequest, 0},
 		{"400 invalid user_id", "user_id=abc", http.StatusBadRequest, 0},
 	}
@@ -218,9 +232,9 @@ func TestHandler_ListByUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &fakeService{
-				listByUserFn: func(_ context.Context, userID int64) ([]*model.Order, error) {
-					if userID == 5 {
-						return []*model.Order{{ID: 1}, {ID: 2}}, nil
+				listFn: func(_ context.Context, userID uuid.UUID) ([]*model.Order, error) {
+					if userID == withResults {
+						return []*model.Order{{ID: uuid.New()}, {ID: uuid.New()}}, nil
 					}
 					return []*model.Order{}, nil
 				},
@@ -229,7 +243,7 @@ func TestHandler_ListByUser(t *testing.T) {
 
 			req := newRequest(http.MethodGet, "/orders?"+tt.query, "")
 			w := httptest.NewRecorder()
-			h.ListByUser(w, req)
+			h.ListOrders(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status: want %d, got %d", tt.wantStatus, w.Code)

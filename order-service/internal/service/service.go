@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dimaglobin/order-service/internal/apperrors"
 	"github.com/dimaglobin/order-service/internal/model"
 )
@@ -27,11 +29,11 @@ func (s *Service) CreateOrder(ctx context.Context, order *model.Order) error {
 	return s.repo.Create(ctx, order)
 }
 
-func (s *Service) GetOrder(ctx context.Context, id int64) (*model.Order, error) {
+func (s *Service) GetOrder(ctx context.Context, id uuid.UUID) (*model.Order, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *Service) CancelOrder(ctx context.Context, id int64) (*model.Order, error) {
+func (s *Service) CancelOrder(ctx context.Context, id uuid.UUID) (*model.Order, error) {
 	order, err := s.GetOrder(ctx, id)
 	if err != nil {
 		return nil, err
@@ -42,6 +44,6 @@ func (s *Service) CancelOrder(ctx context.Context, id int64) (*model.Order, erro
 	return s.repo.UpdateStatus(ctx, id, model.StatusCancelled)
 }
 
-func (s *Service) ListByUser(ctx context.Context, userID int64) ([]*model.Order, error) {
-	return s.repo.ListByUserID(ctx, userID)
+func (s *Service) ListOrders(ctx context.Context, userID uuid.UUID) ([]*model.Order, error) {
+	return s.repo.ListOrders(ctx, userID)
 }
