@@ -47,7 +47,13 @@ func run() error {
 		"group_id", cfg.Kafka.GroupID,
 	)
 
-	sender := service.NewLogSender(log)
+	sender := service.NewSMTPSender(cfg.SMTP.Addr(), cfg.SMTP.From, cfg.SMTP.To, log)
+	log.Info("smtp sender ready",
+		"addr", cfg.SMTP.Addr(),
+		"from", cfg.SMTP.From,
+		"to", cfg.SMTP.To,
+	)
+
 	svc := service.NewService(sender, log)
 	consumer := transport.NewConsumer(reader, svc, log)
 
