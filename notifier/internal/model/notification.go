@@ -24,4 +24,10 @@ type Notification struct {
 	Type    NotificationType
 	Status  NotificationStatus
 	SentAt  time.Time
+
+	// Subject and Body are pre-rendered by the service layer based on the
+	// triggering event. The Sender just delivers them — it doesn't need to
+	// know what kind of event led to this notification.
+	Subject string
+	Body    string
 }
