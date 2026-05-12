@@ -13,24 +13,28 @@ import (
 	"github.com/dimaglobin/notifier/internal/model"
 )
 
+// messageReader is the subset of *kafka.Reader that Consumer uses.
+// Defining it here lets tests swap in a fake without depending on Kafka.
+type messageReader interface {
+	FetchMessage(ctx context.Context) (kafka.Message, error)
+	CommitMessages(ctx context.Context, msgs ...kafka.Message) error
+}
+
 // Consumer reads OrderEvent messages from Kafka and dispatches them to the
 // handler. Offsets are committed only after successful handling — on error
 // the message will be re-delivered on the next fetch (at-least-once).
 type Consumer struct {
-	reader  *kafka.Reader
+	reader  messageReader
 	handler EventHandler
 	log     *slog.Logger
 }
 
-func NewConsumer(reader *kafka.Reader, handler EventHandler, log *slog.Logger) *Consumer {
+func NewConsumer(reader messageReader, handler EventHandler, log *slog.Logger) *Consumer {
 	return &Consumer{reader: reader, handler: handler, log: log}
 }
 
 func (c *Consumer) Run(ctx context.Context) error {
-	c.log.Info("consumer started",
-		"topic", c.reader.Config().Topic,
-		"group_id", c.reader.Config().GroupID,
-	)
+	c.log.Info("consumer started")
 
 	for {
 		msg, err := c.reader.FetchMessage(ctx)

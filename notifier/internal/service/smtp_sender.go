@@ -10,6 +10,10 @@ import (
 	"github.com/dimaglobin/notifier/internal/model"
 )
 
+// mailDialer abstracts the SMTP delivery call so tests can substitute a fake.
+// The signature mirrors net/smtp.SendMail — pluggable without changing call sites.
+type mailDialer func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+
 // SMTPSender delivers notifications via plain SMTP (no auth, no TLS).
 // Designed for local development with MailHog. For real SMTP servers, swap
 // auth=nil for smtp.PlainAuth and use a TLS-enabled dial.
@@ -17,17 +21,24 @@ type SMTPSender struct {
 	addr string // "host:port"
 	from string // From: header
 	to   string // recipient (demo: hardcoded — real systems look up by UserID)
+	dial mailDialer
 	log  *slog.Logger
 }
 
 func NewSMTPSender(addr, from, to string, log *slog.Logger) *SMTPSender {
-	return &SMTPSender{addr: addr, from: from, to: to, log: log}
+	return &SMTPSender{
+		addr: addr,
+		from: from,
+		to:   to,
+		dial: smtp.SendMail, // real network call in production
+		log:  log,
+	}
 }
 
 func (s *SMTPSender) Send(_ context.Context, n *model.Notification) error {
 	msg := buildMessage(s.from, s.to, n.Subject, n.Body)
 
-	if err := smtp.SendMail(s.addr, nil, s.from, []string{s.to}, msg); err != nil {
+	if err := s.dial(s.addr, nil, s.from, []string{s.to}, msg); err != nil {
 		return fmt.Errorf("smtp send: %w", err)
 	}
 
