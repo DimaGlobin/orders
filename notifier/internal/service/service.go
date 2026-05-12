@@ -18,11 +18,27 @@ func NewService(sender Sender, log *slog.Logger) *Service {
 
 func (s *Service) HandleOrderEvent(ctx context.Context, evt model.OrderEvent) error {
 	s.log.Info("handling order event",
-		"type", evt.Type,
+		"event_type", evt.Type,
 		"order_id", evt.OrderID,
 		"user_id", evt.UserID,
 		"status", evt.Status,
 	)
+
+	switch evt.Type {
+	case model.EventOrderCreated:
+		s.log.Info("order created — will notify user",
+			"order_id", evt.OrderID,
+			"user_id", evt.UserID,
+		)
+	case model.EventOrderCancelled:
+		s.log.Info("order cancelled — will notify user",
+			"order_id", evt.OrderID,
+			"user_id", evt.UserID,
+		)
+	default:
+		s.log.Warn("unknown event type, skipping", "type", evt.Type)
+		return nil
+	}
 
 	notification := &model.Notification{
 		OrderID: evt.OrderID,
